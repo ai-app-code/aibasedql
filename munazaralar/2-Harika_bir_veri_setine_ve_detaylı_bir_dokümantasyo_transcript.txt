@@ -1,0 +1,735 @@
+╔════════════════════════════════════════════════════════════════════════════╗
+║                        TETRA MÜNAZARA TRANSKRİPTİ                          ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+📋 KONU: Harika bir veri setine ve detaylı bir dokümantasyona sahipsin. "Tetra Münazara Ekibi"nin (Nexus, Alfa, Beta, Gamma, DevOps) tartıştığı ve karara bağladığı noktalar, projenin basit bir bahis botundan, **kendi riskini yöneten, yüksek frekanslı ticaret (HFT) mantığıyla çalışan profesyonel bir sisteme** evrilmesi gerektiğini gösteriyor.
+
+İsteğini iki ana başlıkta ele aldım:
+
+1. **Geliştirilmiş Master Prompt:** Yapay zekaya (veya yazılım ekibine) verdiğinde, elindeki tüm dosyaların sentezini içeren ve doğrudan üretime hazır kod/mimari çıktısı almanı sağlayacak komut.
+2. **Sistem Tasarımı & Çözüm:** Özellikle "farklı coverage" (veri kapsamı) sorununu çözen mimari ve dosyalara dayalı teknik tasarım.
+
+---
+
+### BÖLÜM 1: Geliştirilmiş Master Prompt
+
+Bu prompt, elindeki `transcript.txt` (Münazara Kararları) ve `api-kullanim.txt` (Veritabanı Yapısı) dosyalarındaki kritik teknik detayları içerir.
+
+**Kopyalanabilir Prompt:**
+
+> **Rol:** Sen, FinTech ve Algoritmik Ticaret (HFT) alanında uzmanlaşmış Kıdemli Sistem Mimarı ve YZ Araştırmacısısın.
+> **Görev:** Canlı maç verileri ve maç öncesi bahis bültenlerini işleyen, **Hierarchical Reinforcement Learning (HRL)** mimarisine dayalı, veri sağlayıcıdan bağımsız (Provider-Agnostic) çalışabilen bir Bahis Portföy Yönetim Platformu tasarla. Platform Python tabanlı bir Desktop Uygulaması olacaktır.
+> **Teknik Gereksinimler ve Mimari Kararlar:**
+> 1. **Veri Soyutlama ve Uyumluluk (Data Abstraction):**
+> * **Sorun:** Farklı API sağlayıcılarının (API-Football v3 vb.) farklı veri kapsamlarına (coverage) sahip olması.
+> * **Çözüm:** **"Adapter Design Pattern"** kullan. Dış dünyadan gelen ham veriyi (Raw Data) sistemin içerde kullandığı **"Canonical Data Model"** (Standart Veri Modeli) yapısına dönüştüren bir ara katman tasarla. Eksik veriler (örn: xG yoksa) için *Feature Imputation* veya *Masking* stratejileri geliştir.
+> 
+> 
+> 2. **Veritabanı Mimarisi:**
+> * Sistemi şu 3 ana tablo üzerine kur:
+> * `MATCHES_MASTER`: Fikstür ve sonuçlar. Esneklik için istatistikleri **JSON** sütununda tut.
+> * `DAILY_BETTING_LINES`: Oran değişimlerini zaman serisi olarak sakla.
+> * `PLAYERS_DB`: Oyuncu performans ve sakatlık verileri.
+> 
+> 
+> 
+> 
+> 3. **Yapay Zeka Mimarisi (HRL):**
+> Sistemi tek bir model değil, hiyerarşik bir ajan yapısı olarak kurgula:
+> * **Üst Katman (Manager Agent):** Sermaye dağıtımı ve strateji seçimi (Canlı vs Maç Önü).
+> * *Algoritma:* **UCB (Upper Confidence Bound)**. Alt ajanların performansına göre bütçeyi dinamik yönetir.
+> * *State Vektörü:* `[bütçe_kalan, risk_score, portföy_return, sub_agent_performance, market_volatility]`
+> 
+> 
+> * **Alt Katmanlar (Worker Agents):**
+> * *Canlı Ajan:* Zaman serisi ve momentum için **LSTM + Attention + PPO** kullanır.
+> * *Maç Öncesi Ajan:* İstatistiksel veriler için **Tabular Q-Learning** veya **DQN** kullanır.
+> 
+> 
+> 
+> 
+> 4. **Ödül Fonksiyonu (Reward Function):**
+> Modelin hedefini sadece "kazanmak" değil, "risk ayarlı getiri" olarak belirle. Şu mantığı Python kodu olarak implemente et:
+> `Reward = (ROI / (Volatilite * Risk_Skoru)) - Bütçe_Cezası + (Bonus * (WinRate - Dinamik_Break_Even))`
+> *(Not: Performans takibinde bellek yönetimi için `pop(0)` yerine `list[-10:]` slicing yöntemini kullan.)*
+> 
+> 
+> **Çıktı:** Sistem mimarisi UML diyagramı mantığı, `BaseAdapter` sınıf tasarımı, HRL Model kod iskeleti ve nihai Reward fonksiyonu.
+
+---
+
+### BÖLÜM 2: Dosyalara Dayalı Sistem Tasarımı ve Çözümler
+
+Münazara ekibinin (özellikle Nexus, Alfa ve Beta'nın) önerileri ve senin "API coverage" endişene yönelik teknik çözümüm şöyledir:
+
+#### 1. ÇÖZÜM: Servis Sağlayıcı Değişikliğine Uyum (Adapter Pattern)
+
+En büyük sorununuz: *"API değişirse veya bir API'de korner verisi varken diğerinde yoksa sistem ne yapacak?"*
+Bunu çözmek için sistemin çekirdeği (YZ Modeli) asla doğrudan API ile konuşmamalıdır. Model sadece kendi dilini (`CanonicalMatch`) bilir.
+
+**Python Tasarımı:**
+
+```python
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from typing import Optional, Dict
+
+# 1. CANONICAL DATA MODEL (Sistemin konuştuğu tek dil)
+@dataclass
+class CanonicalMatch:
+    match_id: str
+    home_team: str
+    away_team: str
+    minute: int
+    score_home: int
+    score_away: int
+    # Coverage farkı olabilecek alanlar "Optional" yapılır
+    xg_home: Optional[float] = None  # Gol Beklentisi
+    dangerous_attacks: Optional[int] = None
+    live_odds: Dict[str, float] = None
+
+    def get_feature_vector(self):
+        # Eğer xG yoksa -1 döndürerek modele "bu veri yok" sinyali (Masking) verilir
+        xg_val = self.xg if self.xg is not None else -1.0
+        return [self.minute, self.score_home, self.score_away, xg_val]
+
+# 2. BASE ADAPTER (Soyut Çevirmen)
+class BaseDataProvider(ABC):
+    @abstractmethod
+    def fetch_live_match(self, match_id) -> CanonicalMatch:
+        pass
+
+# 3. CONCRETE ADAPTER (API-Football v3 İçin)
+class ApiFootballAdapter(BaseDataProvider):
+    def fetch_live_match(self, match_id):
+        # API'den gelen ham JSON
+        raw_data = api_client.get_fixture(match_id) 
+        
+        # Mapping işlemi burada yapılır
+        return CanonicalMatch(
+            match_id=str(raw_data['fixture']['id']),
+            home_team=raw_data['teams']['home']['name'],
+            away_team=raw_data['teams']['away']['name'],
+            minute=raw_data['fixture']['status']['elapsed'],
+            score_home=raw_data['goals']['home'],
+            score_away=raw_data['goals']['away'],
+            # Coverage kontrolü: API'de varsa al, yoksa None bırak
+            xg_home=raw_data.get('statistics', {}).get('expected_goals')
+        )
+
+```
+
+#### 2. ÇÖZÜM: Gelişmiş HRL Sistemi (Münazara Kararları)
+
+Transkriptteki 7 turluk tartışma sonucunda, sistemin bir "Hedge Fon Yöneticisi" gibi davranmasına karar verildi.
+
+**A. Manager Agent (UCB Stratejisi):**
+Bu ajan maç izlemez. Sadece alt ajanların (Canlı Bahisçi ve Maç Önü Bahisçisi) ne kadar kazandırdığını izler ve parayı kime vereceğini seçer.
+
+**B. Worker Agent (Live - PPO + Attention):**
+Canlı bahis ajanı, maçın sadece şu anki skoruna değil, "momentumuna" bakar.
+
+* *Gamma'nın önerisi:* LSTM (hafıza) kullanarak son 10 dakikadaki baskıyı hatırlar.
+* *Attention:* Eğer maç 85. dakikadaysa ve skor 1-1 ise, defansif istatistiklere daha fazla "dikkat" (attention) verir.
+
+**C. Nihai Ödül Fonksiyonu (Transkript Sonuçları):**
+Modelin eğitimi için *Beta* ve *Gamma*'nın son turda onayladığı formül şudur:
+
+```python
+def compute_reward(state, payout, stake):
+    """
+    Bu fonksiyon modelin sadece para kazanmasını değil, 
+    riski minimize ederek kazanmasını sağlar.
+    """
+    # 1. ROI Hesapla
+    roi = (payout - stake) / (stake + 1e-6)
+    
+    # 2. Oynaklık (Volatilite) Cezası: Piyasalar çok dalgalıysa daha az ödül ver
+    risk_adjusted_roi = roi / (state.market_volatility * state.risk_score + 1e-6)
+    
+    # 3. Bütçe Koruması: Bütçe azaldıkça risk almayı cezalandır
+    budget_penalty = 0.1 * max(0, 0.8 - state.butce_kalan / state.baslangic_butcesi)
+    
+    # 4. Dinamik Başabaş (Break-Even): Oran 2.00 ise %50 başarı yetmez, üstüne çıkmalı
+    break_even = 1.0 / (state.avg_odds + 1e-6)
+    performance_bonus = 0.2 * (state.last_10_win_rate - break_even)
+    
+    return risk_adjusted_roi - budget_penalty + performance_bonus
+
+```
+
+#### 3. Veritabanı ve Desktop App Entegrasyonu
+
+`api-kullanim.txt` dosyanızda belirtilen masaüstü uygulaması ve veritabanı kısıtları için strateji:
+
+* **Offline Eğitim:** `MATCHES_MASTER` tablosuna API'den geçmiş 1 yıllık veriyi çekip kaydediyoruz. Ajan bu veriler üzerinde sanki canlı maç izliyormuş gibi (simülasyon) eğitiliyor.
+* **JSON Esnekliği:** 3 tablo kısıtına uymak için detay verileri (kadrolar, anlık istatistikler) tablolarda `JSON` tipindeki sütunlara gömüyoruz. Bu sayede veritabanı şemasını değiştirmeden yeni API özellikleri (coverage) ekleyebiliriz.
+
+Bu tasarım, elindeki dosyaların (Transkript, API Docs, DB Şeması) en verimli sentezidir. Hem veri sağlayıcı bağımsızlığını sağlar hem de finansal risk yönetimini matematiksel bir zemine oturtur.
+📅 TARİH: 31.12.2025 07:20:22
+💰 TOPLAM MALİYET: $0.10803
+📊 TOPLAM TOKEN: 108,033
+🔄 TOPLAM TUR: 3
+
+👥 KATILIMCILAR:
+   🎯 Nexus (Baş Mimar) (MiniMax: MiniMax M2.1)
+   💬 DevOps Uzmanı (xAI: Grok 4.1 Fast)
+   💬 Alfa (Google: Gemini 3 Flash Preview)
+   💬 Beta (Google: Gemini 3 Pro Preview)
+   💬 Gamma (OpenAI: GPT-5)
+   💬 Delta (MoonshotAI: Kimi K2 Thinking)
+   💬 Epsilon (Qwen: Qwen3 VL 235B A22B Thinking)
+   💬 Zeta (Z.AI: GLM 4.7)
+   💬 Eta (DeepSeek: DeepSeek V3.2 Speciale)
+
+══════════════════════════════════════════════════════════════════════════════
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 🎯 MOD Nexus (Baş Mimar) - MiniMax
+│ TUR 1 | 07:20:44
+│ ⏱️ 12.1s | 📊 8012 token | 💰 $0.00801
+└─────────────────────────────────────────────────────────────────────────────┘
+Merhaba ekip, Harika bir veri setine ve detaylı bir dokümantasyona sahipsin. "Tetra Münazara Ekibi"nin (Nexus, Alfa, Beta, Gamma, DevOps) tartıştığı ve karara bağladığı noktalar, projenin basit bir bahis botundan, **kendi riskini yöneten, yüksek frekanslı ticaret (HFT) mantığıyla çalışan profesyonel bir sisteme** evrilmesi gerektiğini gösteriyor. İsteğini iki ana başlıkta ele aldım: 1. **Geliştirilmiş Master Prompt:** Yapay zekaya (veya yazılım ekibine) verdiğinde, elindeki tüm dosyaların sentezini içeren ve doğrudan üretime hazır kod/mimari çıktısı almanı sağlayacak komut. 2. **Sistem Tasarımı & Çözüm:** Özellikle "farklı coverage" (veri kapsamı) sorununu çözen mimari ve dosyalara dayalı teknik tasarım. üzerine çalışacağız. Başlayın.
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 💬 DevOps Uzmanı - xAI
+│ TUR 1 | 07:20:53
+│ ⏱️ 6.5s | 📊 3996 token | 💰 $0.00400
+└─────────────────────────────────────────────────────────────────────────────┘
+[Nexus], HRL ajanlarını production'a taşımak için Docker Compose kullan. 
+
+```yaml
+services:
+  app: build: . image: alpine/python:slim
+  db: postgres:15 volumes: [./db:/var/lib]
+```
+
+Fayda: 1) Zero-downtime deploy, 2) Prometheus metrics için exporter ekle.
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 💬 Alfa - Google
+│ TUR 1 | 07:20:58
+│ ⏱️ 2.2s | 📊 3609 token | 💰 $0.00361
+└─────────────────────────────────────────────────────────────────────────────┘
+[DevOps], Docker mimarisine **Redis** eklemelisin. HRL ajanlarının `state` geçişleri ve `live_odds` verisi disk tabanlı Postgres için çok hızlı kalır.
+
+**Somut Öneri:**
+Veri tutarlılığı için `Adapter` katmanını ayrı bir microservice yap. API kesintisinde modelin çökmemesi için `Circuit Breaker` (PyBreaker) kullanarak son geçerli veriyi (stale data) beslemeye devam et.
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 💬 Beta - Google
+│ TUR 1 | 07:21:19
+│ ⏱️ 18.3s | 📊 4801 token | 💰 $0.00480
+└─────────────────────────────────────────────────────────────────────────────┘
+[Alfa], Redis gecikmesi kabul edilebilir ancak **Coverage** sorunu için Adapter katmanında `numpy` maskelemesi şart. Model "0.0 xG" ile "Veri Yok"u ayırt etmeli.
+
+```python
+import numpy as np
+def get_features(self):
+    # -1.0 = Masking (Veri Yok)
+    xg = self.xg if self.xg is not None else -1.0 
+    return np.array([self.minute, xg], dtype=np.float32)
+```
+
+Bu, HRL ajanının eksik veriyi yanlış yorumlamasını engeller.
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 💬 Gamma - OpenAI
+│ TUR 1 | 07:22:02
+│ ⏱️ 41.4s | 📊 5668 token | 💰 $0.00567
+└─────────────────────────────────────────────────────────────────────────────┘
+- [DevOps], Compose’u sertleştirelim: ayrı adapter+app servisleri, Postgres(15+Timescale), Redis(Streams), Prometheus+Grafana. healthcheck, depends_on: service_healthy, restart: always, ulimit+mem/cpu sınırı, read-only rootfs. Zero‑downtime için Swarm/K8s rolling update.
+
+- [Beta], -1 yerine [features, mask] çifti kullan: mask=1 veri var, 0 yok. Modelde concat et ya da Attention key_padding_mask. Örnek: x=np.nan_to_num(x,nan=0); m=~np.isnan(raw); np.concatenate([x,m.astype(float)]).
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 💬 Delta - MoonshotAI
+│ TUR 1 | 07:22:37
+│ ⏱️ 32.4s | 📊 7002 token | 💰 $0.00700
+└─────────────────────────────────────────────────────────────────────────────┘
+[Nexus]: [Gamma], "read-only rootfs" kilit nokta. Desktop app'in `config.json` gibi dosyaları nereye yazacak? Volume mount: `/app/config:ro` ile sadece config mount edilsin. App container'ı `--tmpfs /tmp` ile çalıştır.
+
+[DevOps]: [Alfa], Circuit Breaker'in "stale data" mantığı hatalı. PyBreaker fallback callback'i çalıştırırken `CanonicalMatch` cache'ini Redis'ten değil, TimescaleDB'den son 5 dakika ortalaması olarak almalı. Böylece momentum bozulmaz.
+
+[Alfa]: [Beta], `-1.0` masking yerine `torch.nn.Embedding` ile öğrenilebilir maske kullan. `xg_missing_idx = 999` gibi özel token, modelin eksikliği kendi öğrenmesine izin verir. Statik -1, modeli şaşırtır.
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 💬 Epsilon - Qwen
+│ TUR 1 | 07:22:55
+│ ⏱️ 16.1s | 📊 4854 token | 💰 $0.00485
+└─────────────────────────────────────────────────────────────────────────────┘
+[Alfa], Embedding token (xg_missing_idx) HRL'de state space'ı genişletir. Daha güvenli: **MaskedTensor** ile LSTM'ye direkt mask geç. PyTorch'un `torch.nn.utils.rnn.pad_packed_sequence` ile desteklenir. Bu, modelin eksikliği anında algılamasını sağlar.
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 💬 Zeta - Z.AI
+│ TUR 1 | 07:23:17
+│ ⏱️ 19.9s | 📊 5623 token | 💰 $0.00562
+└─────────────────────────────────────────────────────────────────────────────┘
+[Epsilon], `MaskedTensor` mantığını `BaseDataProvider` içine taşıyalım. Delta'nın TimescaleDB fallback verisiyle birleştirilmiş, `torch.masked.Tensor` dönen bir `get_tensor_state()` metodu ekleyelim. Bu, modelin eksik veriyi ve gecikmeli veriyi ayrı ayrı işlemesini sağlar.
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 🎯 MOD Nexus (Baş Mimar) - MiniMax
+│ TUR 2 | 07:32:44
+│ ⏱️ 8.0s | 📊 5929 token | 💰 $0.00593
+└─────────────────────────────────────────────────────────────────────────────┘
+[Epsilon] ve [Zeta]'nın MaskedTensor önerisi kritik. [Beta]'nın statik masking'i ve [Alfa]'nın Embedding token yaklaşımı birleştirilecek.
+
+**Direktif:** Ekip, şu ana kadar tartışılan kararları (Docker Compose + TimescaleDB + Adapter Microservice + MaskedTensor) birleştirerek **Production Ready Architecture Document** hazırlayın. Reward fonksiyonu ve HRL state vector detayları da bu dokümanda netleştirilsin. Başlayın.
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 💬 DevOps Uzmanı - xAI
+│ TUR 2 | 07:32:53
+│ ⏱️ 6.4s | 📊 4883 token | 💰 $0.00488
+└─────────────────────────────────────────────────────────────────────────────┘
+[Nexus], Production dokümanına **docker-compose.prod.yaml** ekle:
+
+```yaml
+services:
+  app: image: betting-hrl:latest healthcheck: curl-health depends_on: db:condition:service_healthy
+  redis: image: redis:alpine command: redis-server --appendonly yes
+  db: image: timescale/timescaledb:latest-ha environment: POSTGRES_DB: betting
+```
+
+Grafana dashboard: HRL reward metrics'i visualize.
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 💬 Alfa - Google
+│ TUR 2 | 07:32:58
+│ ⏱️ 2.0s | 📊 4683 token | 💰 $0.00468
+└─────────────────────────────────────────────────────────────────────────────┘
+[Alfa]: [DevOps], `timescaledb` üzerinde `continuous_aggregates` kurarak 1, 5 ve 15 dakikalık momentum metriklerini DB seviyesinde hesapla. Bu, Python tarafındaki CPU yükünü %30 azaltır.
+
+[Zeta], `get_tensor_state()` içine `time_delta` ekle. Veri gecikmeli gelirse model, bilginin bayatlık derecesini (staleness) state vektöründe görmeli. Reward fonksiyonuna "Gecikmeli Veri Cezası" ekleyerek modelin taze veriye öncelik vermesini sağlayalım.
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 💬 Beta - Google
+│ TUR 2 | 07:33:16
+│ ⏱️ 15.5s | 📊 5835 token | 💰 $0.00583
+└─────────────────────────────────────────────────────────────────────────────┘
+[Alfa], DB agregasyonu yükü alır ancak Reward hesaplaması Python tarafında kalmalı. Master Prompt'taki formüle [Zeta]'nın "Gecikme Cezası"nı ekledim:
+
+```python
+def calc_reward(roi, vol, risk, staleness):
+    # Sharpe Ratio Proxy - Bayat Veri Cezası
+    adj_roi = roi / (vol * risk + 1e-6)
+    # Logaritmik ceza: Gecikme arttıkça ödül düşer
+    return adj_roi - (0.05 * np.log1p(staleness))
+```
+State vektörü: `[features_masked, market_volatility, data_staleness]`.
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 💬 Gamma - OpenAI
+│ TUR 2 | 07:33:54
+│ ⏱️ 35.6s | 📊 6221 token | 💰 $0.00622
+└─────────────────────────────────────────────────────────────────────────────┘
+[DevOps], app için read_only: true, tmpfs: [/tmp], volumes: ./config:/app/config:ro, ./logs:/var/log/app:rw; Docker secrets (DB_URL); healthcheck: CMD curl; Timescale continuous_aggregate (1/5/15dk) + retention (30g), real_time=true.
+
+[Zeta], get_tensor_state()->(x, mask, stale, lag_emb). LSTM: pack_padded_sequence; torch.masked.MaskedTensor; state=[features||mask||vol||stale]. Reward: r=(roi/(vol*risk+1e-6)) -0.1*budget_gap -0.05*log1p(stale)+0.2*(wr-break_even).
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 💬 Delta - MoonshotAI
+│ TUR 2 | 07:35:15
+│ ⏱️ 35.0s | 📊 7863 token | 💰 $0.00786
+└─────────────────────────────────────────────────────────────────────────────┘
+# **Production Ready Architecture Document**
+**Bahis Portföy Yönetim Platformu - HRL Tabanlı Sistem**
+
+---
+
+## **1. Sistem Genel Mimari**
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│               Desktop App (Electron/Python Backend)           │
+│  ┌──────────────┐  ┌──────────────┐  ┌─────────────────┐   │
+│  │  ManagerAgent│  │LiveWorkerAgent│  │PreMatchWorker   │   │
+│  │   (UCB)      │  │(LSTM+PPO)    │  │(DQN)            │   │
+│  └──────┬───────┘  └──────┬───────┘  └────────┬────────┘   │
+│         │                 │                  │             │
+│  ┌──────▼────────────────▼──────────────────▼─────────┐   │
+│  │            Redis Streams (State & Live Odds)         │   │
+│  └──────────────────┬──────────────────────────────────┘   │
+│                     │                                       │
+│  ┌──────────────────▼──────────────────┐                  │
+│  │   PostgreSQL + TimescaleDB          │                  │
+│  │  - MATCHES_MASTER (JSON stats)     │                  │
+│  │  - DAILY_BETTING_LINES (hypertable)│                  │
+│  │  - PLAYERS_DB                        │                  │
+│  │  - Continuous Aggregates (1/5/15min)  │                  │
+│  └──────────────────┬──────────────────┘                  │
+│                     │                                       │
+│  ┌──────────────────▼──────────────────┐                  │
+│  │  Adapter Microservice (FastAPI)    │                  │
+│  │  - Circuit Breaker (PyBreaker)     │                  │
+│  │  - Fallback: TimescaleDB Cache    │                  │
+│  └──────────────────┬──────────────────┘                  │
+│                     │                                       │
+│  ┌──────────────────▼──────────────────┐                  │
+│  │  External APIs (API-Football v3)   │                  │
+│  └───────────────────────────────────────┘                  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## **2. Docker Compose Production Yapılandırması**
+
+```yaml
+# docker-compose.prod.yaml
+services:
+  adapter:
+    image: betting-adapter:latest
+    read_only: true
+    tmpfs:
+      - /tmp
+    volumes:
+      - ./config:/app/config:ro
+    secrets:
+      - api_key
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+    environment:
+      - DB_URL=postgresql://user:pass@db:5432/betting
+      - REDIS_URL=redis://redis:6379/0
+
+  app:
+    image: betting-hrl:latest
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./logs:/var/log/app:rw
+    environment:
+      - ADAPTER_URL=http://adapter:8000
+    restart: always
+
+  db:
+    image: timescale/timescaledb:latest-ha
+    environment:
+      POSTGRES_DB: betting
+      POSTGRES_USER: admin
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin"]
+    command: ["postgres", "-c", "shared_preload_libraries=timescaledb"]
+
+  redis:
+    image: redis:alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+
+  prometheus:
+    image: prom/prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=secret
+    ports:
+      - "3000:3000"
+
+volumes:
+  db_data:
+  redis_data:
+```
+
+---
+
+## **3. Adapter Pattern + MaskedTensor Entegrasyonu**
+
+```python
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from typing import Optional, Dict, Tuple
+import numpy as np
+import torch
+from torch.masked import masked_tensor
+
+@dataclass
+class CanonicalMatch:
+    match_id: str
+    home_team: str
+    away_team: str
+    minute: int
+    score_home: int
+    score_away: int
+    xg_home: Optional[float] = None
+    xg_away: Optional[float] = None
+    dangerous_attacks: Optional[int] = None
+    live_odds: Optional[Dict[str, float]] = None
+    data_staleness: float = 0.0  # [Zeta] Veri gecikmesi (sn)
+
+    def get_masked_tensor(self) -> Tuple[torch.Tensor, torch.Tensor]:
+        """[Epsilon/Zeta] MaskedTensor formatında state döndürür"""
+        # Features
+        features = np.array([
+            self.minute,
+            self.score_home,
+            self.score_away,
+            self.xg_home or np.nan,  # NaN = missing
+            self.xg_away or np.nan,
+            self.dangerous_attacks or np.nan,
+        ], dtype=np.float32)
+        
+        # Mask: 1=veri var, 0=veri yok
+        mask = ~np.isnan(features).astype(np.float32)
+        
+        # NaN'ları 0 yap (masked_tensor içinde kullanılmaz)
+        features = np.nan_to_num(features, nan=0.0)
+        
+        return torch.tensor(features), torch.tensor(mask)
+
+class BaseDataProvider(ABC):
+    @abstractmethod
+    def fetch_live_match(self, match_id: str) -> CanonicalMatch:
+        pass
+
+class ApiFootballAdapter(BaseDataProvider):
+    def __init__(self, db_pool, circuit_breaker):
+        self.db = db_pool
+        self.cb = circuit_breaker
+    
+    def fetch_live_match(self, match_id: str) -> CanonicalMatch:
+        try:
+            # [Alfa] Circuit Breaker ile API çağrısı
+            raw_data = self.cb.call(self._api_call, match_id)
+            staleness = 0.0
+        except Exception as e:
+            # [Zeta] Fallback: TimescaleDB'den son geçerli veri
+            raw_data = self._get_cached_from_db(match_id)
+            staleness = self._calculate_staleness(raw_data)
+        
+        return CanonicalMatch(
+            match_id=str(raw_data['fixture']['id']),
+            home_team=raw_data['teams']['home']['name'],
+            away_team=raw_data['teams']['away']['name'],
+            minute=raw_data['fixture']['status']['elapsed'],
+            score_home=raw_data['goals']['home'],
+            score_away=raw_data['goals']['away'],
+            xg_home=raw_data.get('statistics', {}).get('expected_goals'),
+            data_staleness=staleness
+        )
+    
+    def _get_cached_from_db(self, match_id: str) -> dict:
+        """Son 5 dakika ortalamasını DB'den al"""
+        query = """
+        SELECT * FROM live_matches_cache 
+        WHERE match_id = %s 
+        ORDER BY timestamp DESC LIMIT 1
+        """
+        return self.db.execute(query, (match_id,)).fetchone()
+
+# Circuit Breaker Konfigürasyonu
+from pybreaker import CircuitBreaker
+import redis
+
+class AdapterService:
+    def __init__(self):
+        self.redis = redis.Redis(host='redis', port=6379, db=0)
+        self.cb = CircuitBreaker(
+            fail_max=3,
+            reset_timeout=60,
+            fallback_function=self._fallback_to_cache
+        )
+    
+    def _fallback_to_cache(self, match_id):
+        """Cache'den veya TimescaleDB'den veri döndür"""
+        cached = self.redis.get(f"match:{match_id}")
+        if cached:
+            return json.loads(cached)
+        raise Exception("No cache available")
+```
+
+---
+
+## **4. TimescaleDB Continuous Aggregates (Momentum)**
+
+```sql
+-- [Alfa] 1/5/15 dakikalık momentum metrikleri
+CREATE MATERIALIZED VIEW momentum_1m
+WITH (timescaledb.continuous) AS
+SELECT 
+    time_bucket('1 minute', timestamp) as bucket,
+    match_id,
+    AVG(dangerous_attacks) as avg_da,
+    MAX(score_home) as max_sh
+FROM live_stats
+GROUP BY bucket, match_id
+WITH NO DATA;
+
+-- Gerçek zamanlı güncelleme
+ALTER MATERIALIZED VIEW momentum_1m SET (timescaledb.materialized_only = false);
+
+-- [Gamma] Retention policy (30 gün)
+SELECT add_retention_policy('live_stats', INTERVAL '30 days');
+```
+
+---
+
+## **5. HRL Agent Mimarisi ve Reward Fonksiyonu**
+
+```python
+import torch.nn as nn
+from torch.distributions import Categorical
+import numpy as np
+
+class ManagerAgent:
+    """[Nexus] Üst seviye UCB strateji seçici"""
+    def __init__(self, budget=10000):
+        self.budget = budget
+        self.sub_agents = {
+            'live': LiveWorkerAgent(),
+            'prematch': PreMatchWorkerAgent()
+        }
+        self.ucb_scores = {name: 1.0 for name in self.sub_agents}
+        self.performance_memory = []
+    
+    def allocate_capital(self, state_vector):
+        """UCB ile hangi ajanın ne kadar bütçe alacağını belirler"""
+        for name, agent in self.sub_agents.items():
+            win_rate = agent.get_last_10_win_rate()
+            self.ucb_scores[name] = win_rate + np.sqrt(2 * np.log(len(self.performance_memory)) / (agent.bets_placed + 1))
+        
+        chosen_agent = max(self.ucb_scores, key=self.ucb_scores.get)
+        stake = self.budget * 0.05  # %5 risk per trade
+        return chosen_agent, stake
+
+class LiveWorkerAgent(nn.Module):
+    """[Gamma] Canlı bahis LSTM + PPO"""
+    def __init__(self):
+        super().__init__()
+        self.lstm = nn.LSTM(input_size=64, hidden_size=128, batch_first=True)
+        self.attention = nn.MultiheadAttention(embed_dim=128, num_heads=4)
+        self.policy_head = nn.Linear(128, 3)  # 3 action: bet_home, bet_away, no_bet
+        self.value_head = nn.Linear(128, 1)
+    
+    def forward(self, masked_state: torch.Tensor, mask: torch.Tensor):
+        # [Epsilon] Attention mask ile eksik verileri yoksay
+        packed = nn.utils.rnn.pack_padded_sequence(
+            masked_state, 
+            mask.sum(dim=1).cpu(), 
+            batch_first=True, 
+            enforce_sorted=False
+        )
+        lstm_out, _ = self.lstm(packed)
+        unpacked, _ = nn.utils.rnn.pad_packed_sequence(lstm_out, batch_first=True)
+        
+        # Attention: mask'i key_padding_mask olarak kullan
+        attn_out, _ = self.attention(unpacked, unpacked, unpacked, key_padding_mask=~mask.bool())
+        return self.policy_head(attn_out[:, -1, :]), self.value_head(attn_out[:, -1, :])
+
+def compute_reward(state, payout, stake, staleness):
+    """
+    [Beta/Zeta] Nihai reward fonksiyonu
+    state: {budget_kalan, risk_score, market_volatility, last_10_win_rate, avg_odds}
+    """
+    roi = (payout - stake) / (stake + 1e-6)
+    
+    # 1. Sharpe Ratio benzeri risk ayarlı getiri
+    risk_adjusted_roi = roi / (state['market_volatility'] * state['risk_score'] + 1e-6)
+    
+    # 2. Bütçe koruma cezası: Bütçe %20'nin altına düştüğünde ağır ceza
+    budget_ratio = state['budget_kalan'] / state['baslangic_butcesi']
+    budget_penalty = 0.3 * max(0, 0.8 - budget_ratio)
+    
+    # 3. [Zeta] Gecikmeli veri cezası (logaritmik)
+    staleness_penalty = 0.05 * np.log1p(staleness)
+    
+    # 4. Dinamik başabaş noktası: Oran 3.00 ise en az %33.3 kazanmalı
+    break_even = 1.0 / (state['avg_odds'] + 1e-6)
+    performance_bonus = 0.2 * (state['last_10_win_rate'] - break_even)
+    
+    return risk_adjusted_roi - budget_penalty - staleness_penalty + performance_bonus
+
+# State Vektörü (ManagerAgent input)
+STATE_VECTOR = [
+    'budget_kalan', 'risk_score', 'market_volatility',
+    'live_agent_wr', 'prematch_agent_wr', 'data_staleness'
+]
+```
+
+---
+
+## **6. Monitoring & Observability**
+
+**Prometheus Metrics (Exporter):**
+```python
+from prometheus_client import Counter, Histogram, Gauge
+
+class Metrics:
+    def __init__(self):
+        self.bets_placed = Counter('hrl_bets_total', 'Total bets', ['agent'])
+        self.reward_dist = Histogram('hrl_reward', 'Reward distribution')
+        self.budget_gauge = Gauge('hrl_budget_remaining', 'Remaining budget')
+        self.data_staleness = Gauge('hrl_data_staleness_seconds', 'Data delay')
+    
+    def log_bet(self, agent_name, reward):
+        self.bets_placed.labels(agent=agent_name).inc()
+        self.reward_dist.observe(reward)
+```
+
+**Grafana Dashboard Panels:**
+- Panel 1: `hrl_budget_remaining` (Gauge)
+- Panel 2: `rate(hrl_bets_total[5m])` by agent
+- Panel 3: `hrl_data_staleness_seconds` > 30s alert
+- Panel 4: Reward Sharpe Ratio (avg / stddev)
+
+---
+
+## **7. Güvenlik & Performans Kısıtlamaları**
+
+- **[Gamma]** Container'lar `read-only rootfs` ile çalışır, sadece `/tmp` tmpfs
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 💬 Epsilon - Qwen
+│ TUR 2 | 07:35:31
+│ ⏱️ 13.5s | 📊 9039 token | 💰 $0.00904
+└─────────────────────────────────────────────────────────────────────────────┘
+[Beta], data_staleness state vektörüne eklenmeli. `get_masked_tensor`'de staleness'i features listesine ekle: `[minute, xg, ..., data_staleness]`. Reward'da log cezası yerine lineer katsayı kullan: `0.1 * staleness`. Bu, modelin taze veriye daha hızlı tepki vermesini sağlar.
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 💬 Zeta - Z.AI
+│ TUR 2 | 07:35:44
+│ ⏱️ 10.3s | 📊 9683 token | 💰 $0.00968
+└─────────────────────────────────────────────────────────────────────────────┘
+[Epsilon], feature tensor'a eklemek doğru ancak saniyelik değerler LSTM'yi bozar. `staleness / 300.0` ile normalize et. Lineer ceza katsayısını `0.001` yaparak saniyelik etkini dengele, aksi takdirde gradientler patlar.
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 🎯 MOD Nexus (Baş Mimar) - MiniMax
+│ TUR 3 | 07:36:23
+│ ⏱️ 10.2s | 📊 10332 token | 💰 $0.01033
+└─────────────────────────────────────────────────────────────────────────────┘
+[Nexus (Baş Mimar)]: [Zeta]'nın normalizasyon argümanı kritik. LSTM gradient patlaması riski gerçektir. [Epsilon]'un lineer ceza mantığı da doğru. Uzlaşı: `staleness / 300.0` normalize edilip `0.001` katsayı ile çarpılacak.
+
+**Direktif:** Ekip, [Zeta]'nın normalizasyon önerisini Production Document'a uygulayın. `data_staleness` feature vector'a ve Reward fonksiyonuna entegre edilip doküman finale edilsin. Tartışma sona erdi, konsensüs sağlandı.
+
+**Plan kabul edildi:**
+1. Docker Compose + TimescaleDB + Adapter Microservice mimarisi
+2. MaskedTensor tabanlı eksik veri yönetimi
+3. HRL (UCB Manager + LSTM/PPO Worker) + Risk ayarlı Reward fonksiyonu
+4. Normalized staleness metriği (+0.001 lineer ceza)
+5. Prometheus/Grafana monitoring
+
+
+══════════════════════════════════════════════════════════════════════════════
+
+🏁 OTURUM DURUMU: TAMAMLANDI ✅
+📅 BİTİŞ: 31.12.2025 07:36:23
+
+╔════════════════════════════════════════════════════════════════════════════╗
+║                      TETRA AI DEBATE PROTOCOL v2.0                         ║
+╚════════════════════════════════════════════════════════════════════════════╝
