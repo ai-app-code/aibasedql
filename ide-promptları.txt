@@ -1,0 +1,12 @@
+1 ile başlayan dosyayı detaylı bir şekilde incele , 
+yoğunlaşarak bağlamı yakala çünkü bu bir münazara metnidir içinde tekrar eden bağlamlar cümleler olabilir sen dosya içeriğinin 
+tamamını bağlamına al ve => ozetler/*-*.md oluşturarak dosyasına aktar bu işlem txt dosyasının karmaşıklığını anlam ,
+bağlam, bilgi, her hangi bir context eksikliği olmadan sadeleştirmektir.
+###################################################################
+şimdi sana bazı şeyleri açıklamak isityorum : bu münazaraları dünyanın önde gelen llm topluluklarına bir uygulama üzerinden tartışma ve uzlaşma üretmeleri için 
+ben diretkif verdim,ancak farklı kelimlerin ve ifadelerin kondisyonundan ötürü 9 ayrı münazara yapmak zorunda kaldım, amacım insanı bahis için futbol maçlarını 
+değişik parametreler üzerindne (lig,puan,oyun gücü vs...) değerlendirip bahis yapan , çeşitli kupon stratejileri örneğin : tekli,çoklu,sistemli,
+ çeşitli kasa stratejileri üzeirnden taklit eden hatta çok daha zeki davranışlar sergileyelen farklı stratejiler üretip geliştirip sürekli yaşayan bir dijital form , 
+sistem ,varlık üretmek , bu minvalde tüm özet.md dosyalarını incelemeni ve bana bir rapor hazırlamanı istiyorum. insan gibi kelimesi "Analoji olarak kullanıldı " 
+oysa biz insanın analitik düşünce gücünü baz alıp ondan daha zeki stretejiler ve devinimler elde etmek için sistem tasarlamak istedik oysa insaın duygularını taklit 
+etmek böyle bir mimaride yersizdir ! bu bağlamda raporunu tekar gözden geçirmeni isityorum.

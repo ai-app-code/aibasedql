@@ -1,0 +1,2 @@
+İlkel klasöründe bahis sistemi münazarları var ve planlar var, genesis.md dosyası seçildi ve o dosya tekrar münazaraya sokuldu
+artık "ilerlemevar" klasöründen devam et.
